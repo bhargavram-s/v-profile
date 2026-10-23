@@ -1,0 +1,102 @@
+
+services:
+  db01:
+    image: mysql:8.0
+    container_name: vprofile-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./src/main/resources/db_backup.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      vprofile-net:
+        aliases:
+          - db01
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  memcached:
+    image: memcached:1.6-alpine
+    container_name: vprofile-memcached
+    restart: unless-stopped
+    command: ["memcached", "-m", "${MEMCACHED_MEMORY:-64}"]
+    networks:
+      vprofile-net:
+        aliases:
+          - mc01
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: vprofile-rabbitmq
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      vprofile-net:
+        aliases:
+          - rmq01
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+    container_name: vprofile-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    networks:
+      - vprofile-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vprofile-app:1.0
+    container_name: vprofile-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      jdbc.url: "jdbc:mysql://db01:3306/accounts?useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull"
+      jdbc.username: admin
+      jdbc.password: admin123
+      memcached.active.host: mc01
+      memcached.active.port: "11211"
+      rabbitmq.address: rmq01
+      rabbitmq.port: "5672"
+      rabbitmq.username: test
+      rabbitmq.password: test
+      elasticsearch.host: elasticsearch
+      elasticsearch.port: "9200"
+      elasticsearch.cluster: vprofile
+      elasticsearch.node: vprofilenode
+    depends_on:
+      db01:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - vprofile-net
+
+volumes:
+  mysql_data:
+
+networks:
+  vprofile-net:
+    driver: bridge
