@@ -4,6 +4,7 @@ WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DSkipTests
+
 #Stage 2 Copy war fle to tomcat
 FROM tomcat:9.0-jdk17-temurin
 RUN rm -rf usr/local/tomcat/webapps/*
