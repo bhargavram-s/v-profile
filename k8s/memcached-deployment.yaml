@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vprofile-memcached
+  namespace: v-profile
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vprofile-memcached
+  template:
+    metadata:
+      labels:
+        app: vprofile-memcached
+    spec:
+      containers:
+        - name: memcached
+          image: memcached:1.6-alpine
+          ports:
+            - name: memcached
+              containerPort: 11211
+          args:
+            - "-m"
+            - "64"
+            - "-c"
+            - "1024"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 192Mi
+
